@@ -2,9 +2,17 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 
+// 5가지 코드 리뷰 기준 카테고리
+export type CategoryType = 
+  | "readability"      // 가독성
+  | "predictability"   // 예측 가능성
+  | "cohesion"         // 응집도
+  | "coupling"         // 결합도
+  | "micro_perspective"; // 미시적 관점
+
 export type Finding = {
   severity: "low" | "medium" | "high";
-  category?: string;
+  category?: CategoryType;
   file?: string;
   startLine?: number;
   endLine?: number;
@@ -13,13 +21,29 @@ export type Finding = {
   suggestion_patch_diff?: string;
 };
 
+// 기준별 피드백
+export type CriteriaFeedbackItem = {
+  good: string[];    // 잘된 점
+  improve: string[]; // 개선 필요한 점
+};
+
+export type CriteriaFeedback = {
+  readability?: CriteriaFeedbackItem;
+  predictability?: CriteriaFeedbackItem;
+  cohesion?: CriteriaFeedbackItem;
+  coupling?: CriteriaFeedbackItem;
+  micro_perspective?: CriteriaFeedbackItem;
+};
+
 export type ReviewRecord = {
   id: string;
   created_at: string;
   target: { base: string; head: string };
   summary_ko: string;
   risk?: "low" | "medium" | "high";
+  criteria_feedback?: CriteriaFeedback;  // 5가지 기준별 피드백
   findings: Finding[];
+  test_scenarios?: string[];  // 권장 테스트 시나리오
 };
 
 function nowIso() {
@@ -75,6 +99,15 @@ export async function getLatestReview(dataDir: string): Promise<ReviewRecord | n
   return list[0] ?? null;
 }
 
+// 카테고리 한글 매핑
+const CATEGORY_LABELS: Record<CategoryType, string> = {
+  readability: "가독성",
+  predictability: "예측 가능성",
+  cohesion: "응집도",
+  coupling: "결합도",
+  micro_perspective: "미시적 관점"
+};
+
 export function toMarkdown(review: ReviewRecord): string {
   const lines: string[] = [];
   lines.push(`# 코드리뷰 결과 (${review.id})`);
@@ -87,6 +120,39 @@ export function toMarkdown(review: ReviewRecord): string {
   lines.push("");
   lines.push(review.summary_ko.trim());
   lines.push("");
+
+  // 5가지 기준별 피드백 출력
+  if (review.criteria_feedback) {
+    lines.push("## 📊 코드 품질 기준별 피드백");
+    lines.push("");
+    
+    const criteriaOrder: CategoryType[] = [
+      "readability", "predictability", "cohesion", "coupling", "micro_perspective"
+    ];
+    
+    for (const key of criteriaOrder) {
+      const feedback = review.criteria_feedback[key];
+      if (feedback) {
+        lines.push(`### ${CATEGORY_LABELS[key]}`);
+        lines.push("");
+        
+        if (feedback.good?.length) {
+          for (const item of feedback.good) {
+            lines.push(`- ✅ ${item}`);
+          }
+        }
+        if (feedback.improve?.length) {
+          for (const item of feedback.improve) {
+            lines.push(`- ⚠️ ${item}`);
+          }
+        }
+        if (!feedback.good?.length && !feedback.improve?.length) {
+          lines.push("- (평가 없음)");
+        }
+        lines.push("");
+      }
+    }
+  }
 
   if (!review.findings?.length) {
     lines.push("## 발견사항");
@@ -132,7 +198,11 @@ export function toMarkdown(review: ReviewRecord): string {
     lines.push(`### ${idx + 1}. ${severityIcon} [${f.severity}] ${f.title_ko}`);
     lines.push("");
     lines.push(`- **위치**: \`${where}\``);
-    if (f.category) lines.push(`- **분류**: ${f.category}`);
+    // 카테고리를 한글로 표시
+    if (f.category) {
+      const categoryLabel = CATEGORY_LABELS[f.category] || f.category;
+      lines.push(`- **분류**: ${categoryLabel}`);
+    }
     lines.push("");
     lines.push("**설명:**");
     lines.push("");
@@ -152,6 +222,16 @@ export function toMarkdown(review: ReviewRecord): string {
     lines.push("---");
     lines.push("");
   });
+
+  // 권장 테스트 시나리오 출력
+  if (review.test_scenarios?.length) {
+    lines.push("## 🧪 권장 테스트 시나리오");
+    lines.push("");
+    review.test_scenarios.forEach((scenario, idx) => {
+      lines.push(`${idx + 1}. ${scenario}`);
+    });
+    lines.push("");
+  }
 
   return lines.join("\n");
 }

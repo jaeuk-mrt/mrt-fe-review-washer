@@ -2,38 +2,40 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-import { readEnv } from "./services/env.js";
+import { createEnvGetters } from "./services/env.js";
 import { registerTools } from "./tools/registerTools.js";
 import { registerTaskTools } from "./tools/registerTaskTools.js";
 import { registerResources } from "./resources/registerResources.js";
 import { registerPrompts } from "./prompts/registerPrompts.js";
 
 async function main() {
-  // 환경 설정 읽기
-  // - PROJECT_ROOT 환경변수가 있으면 사용
-  // - 없으면 process.cwd() 사용 (repoPath 파라미터로 오버라이드 가능)
-  const env = readEnv(process.cwd());
-
   const server = new McpServer({
     name: "mrt-fe-review-washer",
     version: "0.1.0",
   });
 
+  // 환경 설정 getter 생성
+  // Fallback 순서:
+  // 1. MCP roots (클라이언트가 전달한 워크스페이스 루트)
+  // 2. PROJECT_ROOT 환경변수
+  // 3. process.cwd()
+  const envGetters = createEnvGetters(server, process.cwd());
+
   // 도구, 리소스, 프롬프트 등록
   registerResources(server, { 
-    getDataDir: () => env.dataDir, 
-    getCustomRulesPath: () => env.customRulesPath 
+    getDataDir: envGetters.getDataDir, 
+    getCustomRulesPath: envGetters.getCustomRulesPath 
   });
   registerPrompts(server, { 
-    getCustomRulesPath: () => env.customRulesPath, 
-    getDataDir: () => env.dataDir 
+    getCustomRulesPath: envGetters.getCustomRulesPath, 
+    getDataDir: envGetters.getDataDir 
   });
   registerTools(server, {
-    getProjectRoot: () => env.projectRoot,
-    getDataDir: () => env.dataDir,
-    getCustomRulesPath: () => env.customRulesPath,
+    getProjectRoot: envGetters.getProjectRoot,
+    getDataDir: envGetters.getDataDir,
+    getCustomRulesPath: envGetters.getCustomRulesPath,
   });
-  registerTaskTools(server, { getDataDir: () => env.dataDir });
+  registerTaskTools(server, { getDataDir: envGetters.getDataDir });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
