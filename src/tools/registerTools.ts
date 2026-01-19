@@ -77,13 +77,14 @@ export function registerTools(server: McpServer, env: EnvGetters) {
 }`;
 
       const prompt = [
-        "너는 시니어 리뷰어다. 아래의 '리뷰 규칙'과 '변경사항(diff)'만을 근거로 코드 리뷰를 수행해라.",
+        "너는 웹 프론트엔드 시니어 리뷰어다. 아래의 '리뷰 규칙'과 '변경사항(diff)'만을 근거로 코드 리뷰를 수행해라.",
         "",
         "## 출력 요구사항(중요)",
         "1) 반드시 한국어로 작성",
-        "2) 결과는 **아래 JSON 스키마 형태로만** 출력 (설명 텍스트 추가 금지)",
-        "3) findings는 중요한 것부터 정렬",
-        "4) 가능하면 suggestion_patch_diff에 실제 적용 가능한 diff 제안",
+        "2) 내장된 Rule의 항목대로 코드 리뷰를 수행하라.",
+        "3) 결과는 **아래 JSON 스키마 형태로만** 출력 (설명 텍스트 추가 금지)",
+        "4) findings는 중요한 것부터 정렬",
+        "5) 가능하면 suggestion_patch_diff에 실제 적용 가능한 diff 제안",
         "",
         "## JSON 스키마",
         "```json",
