@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "mrt-fe-review-washer": {
+      "command": "node",
+      "args": ["/ABS/PATH/TO/mrt-fe-review-washer/dist/index.js"],
+      "env": {
+        "PROJECT_ROOT": "(선택) 프로젝트 루트 경로. 미설정시 repoPath 파라미터로 지정",
+        "DATA_DIR": "(선택) 데이터 저장 경로. 미설정시 {PROJECT_ROOT}/.review/data",
+        "CUSTOM_RULES_PATH": "(선택) 커스텀 규칙 파일. 미설정시 {PROJECT_ROOT}/.review/rules.md"
+      }
+    }
+  }
+}

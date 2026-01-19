@@ -1,0 +1,14 @@
+# 선택: 구조화된 체크리스트(원하면 사용)
+# 이 파일은 아직 서버 로직에서 강제하지 않습니다.
+# rules.ko.md 중심으로 시작하고, 필요해지면 체크리스트도 파싱해서 강제하세요.
+
+checks:
+  - id: error-handling
+    title_ko: "에러 처리/경계값"
+    severity: high
+  - id: security
+    title_ko: "보안"
+    severity: high
+  - id: perf
+    title_ko: "성능"
+    severity: medium
