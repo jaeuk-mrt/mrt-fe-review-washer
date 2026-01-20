@@ -184,6 +184,6 @@ cancelled   cancelled
 
 | Prompt         | 설명                    |
 | -------------- | ----------------------- |
-| `review-ko`    | 한국어 코드 리뷰 템플릿 |
+| `review`       | 코드 리뷰 템플릿      |
 | `task-execute` | Task 실행 가이드        |
 | `task-plan`    | Task 계획 수립          |
