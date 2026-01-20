@@ -7,11 +7,13 @@ export const TaskStatusSchema = z.enum(["pending", "in_progress", "completed", "
 // 79~60점: recommendation (적극제안)
 // 59~40점: improvement (개선)
 // 39~0점: required (필수)
+// 별도: needs_confirmation (확인요청) - 리뷰어가 확신이 없는 경우
 export const TaskSeveritySchema = z.enum([
-  "suggestion",     // 단순제안
-  "recommendation", // 적극제안
-  "improvement",    // 개선
-  "required"        // 필수
+  "suggestion",          // 단순제안
+  "recommendation",      // 적극제안
+  "improvement",         // 개선
+  "required",            // 필수
+  "needs_confirmation"   // 확인요청
 ]);
 
 export const TaskIdSchema = z.object({
@@ -21,7 +23,7 @@ export const TaskIdSchema = z.object({
 export const TaskCreateInputSchema = z.object({
   title: z.string().min(1).describe("Task 제목"),
   description: z.string().min(1).describe("Task 설명"),
-  severity: TaskSeveritySchema.default("improvement").describe("평가 라벨 (suggestion/recommendation/improvement/required)"),
+  severity: TaskSeveritySchema.default("improvement").describe("평가 라벨 (suggestion/recommendation/improvement/required/needs_confirmation)"),
   category: z.string().optional().describe("분류 (예: bug, security, perf, style)"),
   file: z.string().optional().describe("대상 파일 경로"),
   startLine: z.number().int().positive().optional().describe("시작 라인"),

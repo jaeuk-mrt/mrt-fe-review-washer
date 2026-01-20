@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { getGitDiff } from "../services/gitDiff.js";
 import { readRules, getDefaultRulesPath } from "../services/rules.js";
-import { saveReview, listReviews, getReview, toMarkdown } from "../services/storage.js";
+import { saveReview, listReviews, getReview, toMarkdown, saveMarkdownFile } from "../services/storage.js";
+import { loadPromptFromTemplate, generatePrompt } from "../services/promptTemplate.js";
 import { ReviewIdSchema, ReviewSaveInputSchema } from "./schemas.js";
 
 type EnvGetters = {
@@ -16,10 +17,10 @@ export function registerTools(server: McpServer, env: EnvGetters) {
   // 1) collect_diff
   server.tool(
     "review.collect_diff",
-    "git diff(base...head)를 수집해서 반환합니다.",
+    "git diff(base...head)를 수집해서 반환합니다. base가 'main'이면 자동으로 'origin/main'으로 변환됩니다.",
     {
       repoPath: z.string().optional().describe("로컬 git 저장소 경로 (미지정시 PROJECT_ROOT 사용)"),
-      base: z.string().optional().default("main"),
+      base: z.string().optional().default("origin/main").describe("기준 브랜치 (기본값: origin/main, 'main' 입력 시 자동으로 origin/main으로 변환)"),
       head: z.string().optional().default("HEAD"),
       contextLines: z.number().int().min(0).max(20).optional()
     },
@@ -42,10 +43,10 @@ export function registerTools(server: McpServer, env: EnvGetters) {
   // 3) make_prompt
   server.tool(
     "review.make_prompt",
-    "규칙 + diff를 합쳐, 모델에게 그대로 넘길 '리뷰 프롬프트 패키지(한국어)'를 만들어줍니다.",
+    "규칙 + diff를 합쳐, 모델에게 그대로 넘길 '리뷰 프롬프트 패키지(한국어)'를 만들어줍니다. base가 'main'이면 자동으로 'origin/main'으로 변환됩니다.",
     {
       repoPath: z.string().optional().describe("로컬 git 저장소 경로 (미지정시 PROJECT_ROOT 사용)"),
-      base: z.string().optional().default("main"),
+      base: z.string().optional().default("origin/main").describe("기준 브랜치 (기본값: origin/main, 'main' 입력 시 자동으로 origin/main으로 변환)"),
       head: z.string().optional().default("HEAD"),
       contextLines: z.number().int().min(0).max(20).optional(),
       maxDiffChars: z.number().int().min(1000).max(200000).optional().default(120000)
@@ -63,90 +64,34 @@ export function registerTools(server: McpServer, env: EnvGetters) {
   "summary_ko": "변경 사항에 대한 간략한 요약(한국어)",
   "risk": "low | medium | high",
   "criteria_feedback": {
-    "readability": { "label": "suggestion | recommendation | improvement | required", "good": ["잘된 점"], "improve": ["개선 필요한 점"] },
-    "predictability": { "label": "suggestion | recommendation | improvement | required", "good": ["잘된 점"], "improve": ["개선 필요한 점"] },
-    "cohesion": { "label": "suggestion | recommendation | improvement | required", "good": ["잘된 점"], "improve": ["개선 필요한 점"] },
-    "coupling": { "label": "suggestion | recommendation | improvement | required", "good": ["잘된 점"], "improve": ["개선 필요한 점"] },
-    "micro_perspective": { "label": "suggestion | recommendation | improvement | required", "good": ["잘된 점"], "improve": ["개선 필요한 점"] },
-    "intent_clarity": { "label": "suggestion | recommendation | improvement | required", "good": ["잘된 점"], "improve": ["개선 필요한 점"] }
+    "readability": { "label": "suggestion | recommendation | improvement | required | needs_confirmation", "improve": ["개선 필요한 점"] },
+    "predictability": { "label": "suggestion | recommendation | improvement | required | needs_confirmation", "improve": ["개선 필요한 점"] },
+    "cohesion": { "label": "suggestion | recommendation | improvement | required | needs_confirmation", "improve": ["개선 필요한 점"] },
+    "coupling": { "label": "suggestion | recommendation | improvement | required | needs_confirmation", "improve": ["개선 필요한 점"] },
+    "micro_perspective": { "label": "suggestion | recommendation | improvement | required | needs_confirmation", "improve": ["개선 필요한 점"] },
+    "intent_clarity": { "label": "suggestion | recommendation | improvement | required | needs_confirmation", "improve": ["개선 필요한 점"] }
   },
   "findings": [
     {
-      "severity": "suggestion | recommendation | improvement | required",
+      "severity": "suggestion | recommendation | improvement | required | needs_confirmation",
       "category": "readability | predictability | cohesion | coupling | micro_perspective | intent_clarity",
       "file": "파일 경로",
       "startLine": 1,
       "endLine": 10,
       "title_ko": "짧은 제목",
-      "detail_ko": "설명 + 근거 + 왜 중요한지",
-      "suggestion_patch_diff": "diff 텍스트(선택)"
+      "detail_ko": "설명 + 근거 + 왜 중요한지 (needs_confirmation인 경우: 왜 확인이 필요한지, 어떤 점이 의문인지)",
+      "suggestion_patch_diff": "diff 텍스트(선택, needs_confirmation인 경우 제공하지 않음)"
     }
   ],
-  "test_scenarios": ["권장 테스트 시나리오 1", "권장 테스트 시나리오 2"]
 }`;
 
-      const prompt = [
-        "너는 웹 프론트엔드 시니어 리뷰어다. 아래의 '리뷰 규칙'과 '변경사항(diff)'만을 근거로 코드 리뷰를 수행해라.",
-        "",
-        "## 코드 리뷰 기준 (6가지 항목을 반드시 검토)",
-        "",
-        "### 1. 가독성(Readability)",
-        "- 맥락 줄이기: 같이 실행되지 않는 코드가 하나의 함수/컴포넌트에 섞여 있지 않은가?",
-        "- 맥락이 포함되는 이름 붙이기: 복잡한 조건/매직 넘버에 의미 있는 이름이 붙어 있는가?",
-        "- 위에서 아래로 읽히는지: 코드 흐름이 자연스럽게 위에서 아래로 읽히는가?",
-        "",
-        "### 2. 예측 가능성(Predictability)",
-        "- 동일 이름의 일관된 동작: 같은 이름을 가진 함수/변수가 동일한 동작을 하는가?",
-        "- 반환 타입 통일: 같은 종류의 함수는 반환 타입이 통일되어 있는가?",
-        "- 명시적 동작: 숨겨진 로직 없이 동작이 명시적으로 드러나는가?",
-        "",
-        "### 3. 응집도(Cohesion)",
-        "- 함께 수정되는 코드가 같은 위치에 있는지: 함께 수정되는 파일이 같은 디렉토리에 있는가?",
-        "- 도메인별 적절하게 분리되는지: 도메인별로 코드가 적절히 분리되어 있는가?",
-        "",
-        "### 4. 결합도(Coupling)",
-        "- 단일 책임: 하나의 함수/Hook이 하나의 책임만 가지고 있는가?",
-        "- 상태 분산: 페이지 전체의 상태를 한 곳에서 관리하지 않는가?",
-        "- Props Drilling 여부: Props Drilling이 발생하지 않는가?",
-        "",
-        "### 5. 미시적 관점(Micro Perspective)",
-        "- 조건부 렌더링 패턴: 일관되게 사용되는가? (ts-pattern, Show, SwitchCase)",
-        "- 전역 상태 가이드: 전역 상태를 함부로 넣지 않는가?",
-        "- 타입 정의: any, unknown, as assertion 사용 및 불필요한 타입 정의가 없는가?",
-        "- 암묵적 타입 변환: 암묵적 타입 변환 사용이 명확한가?",
-        "",
-        "### 6. 의도 간결성(Intent Clarity)",
-        "- 코드 작성 의도가 간결하고 명확하게 드러나는가?",
-        "",
-        "## 평가 라벨 기준 (점수 기반)",
-        "- 100~80점: suggestion (단순제안) - 코드가 잘 작성됨, 선택적 개선",
-        "- 79~60점: recommendation (적극제안) - 개선하면 좋음",
-        "- 59~40점: improvement (개선) - 개선이 필요함",
-        "- 39~0점: required (필수) - 반드시 수정해야 함",
-        "",
-        "## 출력 요구사항(중요)",
-        "1) 반드시 한국어로 작성",
-        "2) 위 6가지 기준 각각에 대해 label(평가 라벨)과 잘된 점(✅), 개선 필요한 점(⚠️)을 구분하여 평가",
-        "3) 결과는 **아래 JSON 스키마 형태로만** 출력 (설명 텍스트 추가 금지)",
-        "4) findings는 severity가 높은 것(required)부터 정렬",
-        "5) findings의 category는 반드시 6가지 기준 중 하나로 지정",
-        "6) 가능하면 suggestion_patch_diff에 실제 적용 가능한 diff 제안",
-        "7) 권장 테스트 시나리오를 test_scenarios에 포함",
-        "8) 문제가능성이 있는 것을 전부 밝혀라 - 리뷰는 코드 퀄리티를 위한 최후의 방어선",
-        "",
-        "## JSON 스키마",
-        "```json",
+      // 템플릿 파일 로드 및 변수 치환
+      const template = await loadPromptFromTemplate("review/index.md");
+      const prompt = generatePrompt(template, {
         schemaHint,
-        "```",
-        "",
-        "## 리뷰 규칙(프로젝트/팀 규칙)",
-        rules?.trim() ? rules.trim() : "(rules file is empty)",
-        "",
-        "## 변경사항(diff)",
-        "```diff",
-        safeDiff.trimEnd(),
-        "```"
-      ].join("\n");
+        rules: rules?.trim() || "(rules file is empty)",
+        diff: safeDiff.trimEnd()
+      });
 
       return {
         content: [{
@@ -209,11 +154,18 @@ export function registerTools(server: McpServer, env: EnvGetters) {
   // 7) export_markdown
   server.tool(
     "review.export_markdown",
-    "특정 review_id를 마크다운으로 변환합니다.",
+    "특정 review_id를 마크다운으로 변환하고 파일로 저장합니다.",
     ReviewIdSchema.shape,
     async ({ id }) => {
       const r = await getReview(env.getDataDir(), id);
-      return { content: [{ type: "text", text: toMarkdown(r) }] };
+      const markdown = toMarkdown(r);
+      const filePath = await saveMarkdownFile(env.getDataDir(), id, markdown);
+      return { 
+        content: [{ 
+          type: "text", 
+          text: `✅ 마크다운 파일 저장 완료: ${filePath}\n\n${markdown}` 
+        }] 
+      };
     }
   );
 

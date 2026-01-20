@@ -15,11 +15,13 @@ export const CategoryEnum = z.enum([
 // 79~60점: recommendation (적극제안)
 // 59~40점: improvement (개선)
 // 39~0점: required (필수)
+// 별도: needs_confirmation (확인요청) - 리뷰어가 확신이 없는 경우
 export const SeverityEnum = z.enum([
-  "suggestion",     // 단순제안 (100~80점)
-  "recommendation", // 적극제안 (79~60점)
-  "improvement",    // 개선 (59~40점)
-  "required"        // 필수 (39~0점)
+  "suggestion",          // 단순제안 (100~80점)
+  "recommendation",      // 적극제안 (79~60점)
+  "improvement",         // 개선 (59~40점)
+  "required",            // 필수 (39~0점)
+  "needs_confirmation"   // 확인요청 (확신이 없는 경우)
 ]);
 
 export const FindingSchema = z.object({
@@ -36,7 +38,6 @@ export const FindingSchema = z.object({
 // 기준별 피드백 스키마
 export const CriteriaFeedbackItemSchema = z.object({
   label: SeverityEnum.optional(),               // 해당 기준의 평가 라벨
-  good: z.array(z.string()).default([]),        // 잘된 점
   improve: z.array(z.string()).default([])      // 개선 필요한 점
 });
 
@@ -57,8 +58,7 @@ export const ReviewSaveInputSchema = z.object({
   summary_ko: z.string().min(1),
   risk: z.enum(["low", "medium", "high"]).optional(),
   criteria_feedback: CriteriaFeedbackSchema,  // 5가지 기준별 피드백
-  findings: z.array(FindingSchema).default([]),
-  test_scenarios: z.array(z.string()).default([])  // 권장 테스트 시나리오
+  findings: z.array(FindingSchema).default([])
 });
 
 export const ReviewIdSchema = z.object({

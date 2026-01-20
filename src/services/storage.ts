@@ -13,10 +13,11 @@ export type CategoryType =
 
 // 평가 라벨 (점수 기반)
 export type SeverityType = 
-  | "suggestion"     // 단순제안 (100~80점)
-  | "recommendation" // 적극제안 (79~60점)
-  | "improvement"    // 개선 (59~40점)
-  | "required";      // 필수 (39~0점)
+  | "suggestion"          // 단순제안 (100~80점)
+  | "recommendation"      // 적극제안 (79~60점)
+  | "improvement"         // 개선 (59~40점)
+  | "required"            // 필수 (39~0점)
+  | "needs_confirmation"; // 확인요청 (확신이 없는 경우)
 
 export type Finding = {
   severity: SeverityType;
@@ -32,7 +33,6 @@ export type Finding = {
 // 기준별 피드백
 export type CriteriaFeedbackItem = {
   label?: SeverityType; // 해당 기준의 평가 라벨
-  good: string[];       // 잘된 점
   improve: string[];    // 개선 필요한 점
 };
 
@@ -53,7 +53,6 @@ export type ReviewRecord = {
   risk?: "low" | "medium" | "high";
   criteria_feedback?: CriteriaFeedback;  // 5가지 기준별 피드백
   findings: Finding[];
-  test_scenarios?: string[];  // 권장 테스트 시나리오
 };
 
 function nowIso() {
@@ -124,7 +123,8 @@ const SEVERITY_LABELS: Record<SeverityType, string> = {
   suggestion: "단순제안",
   recommendation: "적극제안",
   improvement: "개선",
-  required: "필수"
+  required: "필수",
+  needs_confirmation: "확인요청"
 };
 
 // 평가 라벨 아이콘 매핑
@@ -132,8 +132,16 @@ const SEVERITY_ICONS: Record<SeverityType, string> = {
   suggestion: "💡",
   recommendation: "📝",
   improvement: "⚠️",
-  required: "🔴"
+  required: "🔴",
+  needs_confirmation: "❓"
 };
+
+export async function saveMarkdownFile(dataDir: string, reviewId: string, content: string): Promise<string> {
+  await ensureDirs(dataDir);
+  const filePath = path.join(dataDir, "reviews", `${reviewId}.md`);
+  await fs.writeFile(filePath, content, "utf-8");
+  return filePath;
+}
 
 export function toMarkdown(review: ReviewRecord): string {
   const lines: string[] = [];
@@ -166,17 +174,11 @@ export function toMarkdown(review: ReviewRecord): string {
         lines.push(`### ${CATEGORY_LABELS[key]}${labelStr}`);
         lines.push("");
         
-        if (feedback.good?.length) {
-          for (const item of feedback.good) {
-            lines.push(`- ✅ ${item}`);
-          }
-        }
         if (feedback.improve?.length) {
           for (const item of feedback.improve) {
             lines.push(`- ⚠️ ${item}`);
           }
-        }
-        if (!feedback.good?.length && !feedback.improve?.length) {
+        } else {
           lines.push("- (평가 없음)");
         }
         lines.push("");
@@ -196,11 +198,12 @@ export function toMarkdown(review: ReviewRecord): string {
   const improvementCount = review.findings.filter(f => f.severity === "improvement").length;
   const recommendationCount = review.findings.filter(f => f.severity === "recommendation").length;
   const suggestionCount = review.findings.filter(f => f.severity === "suggestion").length;
+  const needsConfirmationCount = review.findings.filter(f => f.severity === "needs_confirmation").length;
   const withSuggestion = review.findings.filter(f => f.suggestion_patch_diff).length;
 
   lines.push("## 🔍 주요 발견사항");
   lines.push("");
-  lines.push(`> 총 **${review.findings.length}건** (🔴 필수: ${requiredCount} | ⚠️ 개선: ${improvementCount} | 📝 적극제안: ${recommendationCount} | 💡 단순제안: ${suggestionCount}) | 제안 패치: ${withSuggestion}건`);
+  lines.push(`> 총 **${review.findings.length}건** (🔴 필수: ${requiredCount} | ⚠️ 개선: ${improvementCount} | 📝 적극제안: ${recommendationCount} | 💡 단순제안: ${suggestionCount} | ❓ 확인요청: ${needsConfirmationCount}) | 제안 패치: ${withSuggestion}건`);
   lines.push("");
   
   // 요약 테이블
@@ -255,16 +258,6 @@ export function toMarkdown(review: ReviewRecord): string {
     lines.push("---");
     lines.push("");
   });
-
-  // 권장 테스트 시나리오 출력
-  if (review.test_scenarios?.length) {
-    lines.push("## 🧪 권장 테스트 시나리오");
-    lines.push("");
-    review.test_scenarios.forEach((scenario, idx) => {
-      lines.push(`${idx + 1}. ${scenario}`);
-    });
-    lines.push("");
-  }
 
   return lines.join("\n");
 }

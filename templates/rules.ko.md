@@ -616,19 +616,15 @@ const SearchLogger = createLoggerBoundary<SearchResultLog>();
 ## 코드 품질 기준별 피드백
 
 ### 가독성
-- ✅ [잘된 점]
 - ⚠️ [개선 필요한 점]
 
 ### 예측 가능성
-- ✅ [잘된 점]
 - ⚠️ [개선 필요한 점]
 
 ### 응집도
-- ✅ [잘된 점]
 - ⚠️ [개선 필요한 점]
 
 ### 결합도
-- ✅ [잘된 점]
 - ⚠️ [개선 필요한 점]
 
 ## 🚨 리스크 상위 3개
@@ -655,10 +651,6 @@ const SearchLogger = createLoggerBoundary<SearchResultLog>();
 +   .otherwise(() => null);
 ```
 
-## 🧪 권장 테스트 시나리오
-1. [시나리오 1]
-2. [시나리오 2]
-3. [시나리오 3]
 ```
 
 ---

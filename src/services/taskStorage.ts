@@ -6,10 +6,11 @@ export type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
 
 // 평가 라벨 (점수 기반)
 export type SeverityType = 
-  | "suggestion"     // 단순제안 (100~80점)
-  | "recommendation" // 적극제안 (79~60점)
-  | "improvement"    // 개선 (59~40점)
-  | "required";      // 필수 (39~0점)
+  | "suggestion"          // 단순제안 (100~80점)
+  | "recommendation"      // 적극제안 (79~60점)
+  | "improvement"         // 개선 (59~40점)
+  | "required"            // 필수 (39~0점)
+  | "needs_confirmation"; // 확인요청 (확신이 없는 경우)
 
 export type Task = {
   id: string;
@@ -218,7 +219,8 @@ const SEVERITY_LABELS: Record<SeverityType, string> = {
   suggestion: "단순제안",
   recommendation: "적극제안",
   improvement: "개선",
-  required: "필수"
+  required: "필수",
+  needs_confirmation: "확인요청"
 };
 
 /**
