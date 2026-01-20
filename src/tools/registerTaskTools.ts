@@ -207,8 +207,13 @@ export function registerTaskTools(server: McpServer, env: EnvGetters) {
         lines.push("");
         lines.push("아래 diff를 참고하여 수정하세요:");
         lines.push("");
+        // diff 내용에서 코드 블록 마커 제거 및 정리
+        const cleanDiff = updated.suggestion_patch_diff
+          .replace(/^```diff\s*/i, "")  // 시작 부분의 ```diff 제거
+          .replace(/```\s*$/g, "")      // 끝 부분의 ``` 제거
+          .trim();
         lines.push("```diff");
-        lines.push(updated.suggestion_patch_diff.replace(/^```diff\n?|```$/g, "").trim());
+        lines.push(cleanDiff);
         lines.push("```");
         lines.push("");
       }
@@ -270,8 +275,13 @@ export function registerTaskTools(server: McpServer, env: EnvGetters) {
       if (task.suggestion_patch_diff) {
         lines.push("### 제안되었던 패치");
         lines.push("");
+        // diff 내용에서 코드 블록 마커 제거 및 정리
+        const cleanDiff = task.suggestion_patch_diff
+          .replace(/^```diff\s*/i, "")  // 시작 부분의 ```diff 제거
+          .replace(/```\s*$/g, "")      // 끝 부분의 ``` 제거
+          .trim();
         lines.push("```diff");
-        lines.push(task.suggestion_patch_diff.replace(/^```diff\n?|```$/g, "").trim());
+        lines.push(cleanDiff);
         lines.push("```");
         lines.push("");
       }
