@@ -1,17 +1,30 @@
 import { z } from "zod";
 
-// 5가지 코드 리뷰 기준 카테고리
+// 6가지 코드 리뷰 기준 카테고리
 export const CategoryEnum = z.enum([
   "readability",      // 가독성
   "predictability",   // 예측 가능성
   "cohesion",         // 응집도
   "coupling",         // 결합도
-  "micro_perspective" // 미시적 관점
+  "micro_perspective", // 미시적 관점
+  "intent_clarity"    // 코드 작성 의도 간결성
+]);
+
+// 평가 라벨 (점수 기반)
+// 100~80점: suggestion (단순제안)
+// 79~60점: recommendation (적극제안)
+// 59~40점: improvement (개선)
+// 39~0점: required (필수)
+export const SeverityEnum = z.enum([
+  "suggestion",     // 단순제안 (100~80점)
+  "recommendation", // 적극제안 (79~60점)
+  "improvement",    // 개선 (59~40점)
+  "required"        // 필수 (39~0점)
 ]);
 
 export const FindingSchema = z.object({
-  severity: z.enum(["low", "medium", "high"]),
-  category: CategoryEnum.optional(), // 5가지 기준 중 하나
+  severity: SeverityEnum,
+  category: CategoryEnum.optional(), // 6가지 기준 중 하나
   file: z.string().optional(),
   startLine: z.number().int().positive().optional(),
   endLine: z.number().int().positive().optional(),
@@ -22,8 +35,9 @@ export const FindingSchema = z.object({
 
 // 기준별 피드백 스키마
 export const CriteriaFeedbackItemSchema = z.object({
-  good: z.array(z.string()).default([]),    // 잘된 점
-  improve: z.array(z.string()).default([])  // 개선 필요한 점
+  label: SeverityEnum.optional(),               // 해당 기준의 평가 라벨
+  good: z.array(z.string()).default([]),        // 잘된 점
+  improve: z.array(z.string()).default([])      // 개선 필요한 점
 });
 
 export const CriteriaFeedbackSchema = z.object({
@@ -31,7 +45,8 @@ export const CriteriaFeedbackSchema = z.object({
   predictability: CriteriaFeedbackItemSchema.optional(),
   cohesion: CriteriaFeedbackItemSchema.optional(),
   coupling: CriteriaFeedbackItemSchema.optional(),
-  micro_perspective: CriteriaFeedbackItemSchema.optional()
+  micro_perspective: CriteriaFeedbackItemSchema.optional(),
+  intent_clarity: CriteriaFeedbackItemSchema.optional()
 }).optional();
 
 export const ReviewSaveInputSchema = z.object({

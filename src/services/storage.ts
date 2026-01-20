@@ -2,16 +2,24 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 
-// 5가지 코드 리뷰 기준 카테고리
+// 6가지 코드 리뷰 기준 카테고리
 export type CategoryType = 
   | "readability"      // 가독성
   | "predictability"   // 예측 가능성
   | "cohesion"         // 응집도
   | "coupling"         // 결합도
-  | "micro_perspective"; // 미시적 관점
+  | "micro_perspective" // 미시적 관점
+  | "intent_clarity";   // 코드 작성 의도 간결성
+
+// 평가 라벨 (점수 기반)
+export type SeverityType = 
+  | "suggestion"     // 단순제안 (100~80점)
+  | "recommendation" // 적극제안 (79~60점)
+  | "improvement"    // 개선 (59~40점)
+  | "required";      // 필수 (39~0점)
 
 export type Finding = {
-  severity: "low" | "medium" | "high";
+  severity: SeverityType;
   category?: CategoryType;
   file?: string;
   startLine?: number;
@@ -23,8 +31,9 @@ export type Finding = {
 
 // 기준별 피드백
 export type CriteriaFeedbackItem = {
-  good: string[];    // 잘된 점
-  improve: string[]; // 개선 필요한 점
+  label?: SeverityType; // 해당 기준의 평가 라벨
+  good: string[];       // 잘된 점
+  improve: string[];    // 개선 필요한 점
 };
 
 export type CriteriaFeedback = {
@@ -33,6 +42,7 @@ export type CriteriaFeedback = {
   cohesion?: CriteriaFeedbackItem;
   coupling?: CriteriaFeedbackItem;
   micro_perspective?: CriteriaFeedbackItem;
+  intent_clarity?: CriteriaFeedbackItem;
 };
 
 export type ReviewRecord = {
@@ -105,7 +115,24 @@ const CATEGORY_LABELS: Record<CategoryType, string> = {
   predictability: "예측 가능성",
   cohesion: "응집도",
   coupling: "결합도",
-  micro_perspective: "미시적 관점"
+  micro_perspective: "미시적 관점",
+  intent_clarity: "의도 간결성"
+};
+
+// 평가 라벨 한글 매핑
+const SEVERITY_LABELS: Record<SeverityType, string> = {
+  suggestion: "단순제안",
+  recommendation: "적극제안",
+  improvement: "개선",
+  required: "필수"
+};
+
+// 평가 라벨 아이콘 매핑
+const SEVERITY_ICONS: Record<SeverityType, string> = {
+  suggestion: "💡",
+  recommendation: "📝",
+  improvement: "⚠️",
+  required: "🔴"
 };
 
 export function toMarkdown(review: ReviewRecord): string {
@@ -121,19 +148,22 @@ export function toMarkdown(review: ReviewRecord): string {
   lines.push(review.summary_ko.trim());
   lines.push("");
 
-  // 5가지 기준별 피드백 출력
+  // 6가지 기준별 피드백 출력
   if (review.criteria_feedback) {
     lines.push("## 📊 코드 품질 기준별 피드백");
     lines.push("");
     
     const criteriaOrder: CategoryType[] = [
-      "readability", "predictability", "cohesion", "coupling", "micro_perspective"
+      "readability", "predictability", "cohesion", "coupling", "micro_perspective", "intent_clarity"
     ];
     
     for (const key of criteriaOrder) {
       const feedback = review.criteria_feedback[key];
       if (feedback) {
-        lines.push(`### ${CATEGORY_LABELS[key]}`);
+        const labelStr = feedback.label 
+          ? ` [${SEVERITY_ICONS[feedback.label]} ${SEVERITY_LABELS[feedback.label]}]`
+          : "";
+        lines.push(`### ${CATEGORY_LABELS[key]}${labelStr}`);
         lines.push("");
         
         if (feedback.good?.length) {
@@ -162,23 +192,25 @@ export function toMarkdown(review: ReviewRecord): string {
   }
 
   // 발견사항 통계
-  const highCount = review.findings.filter(f => f.severity === "high").length;
-  const mediumCount = review.findings.filter(f => f.severity === "medium").length;
-  const lowCount = review.findings.filter(f => f.severity === "low").length;
+  const requiredCount = review.findings.filter(f => f.severity === "required").length;
+  const improvementCount = review.findings.filter(f => f.severity === "improvement").length;
+  const recommendationCount = review.findings.filter(f => f.severity === "recommendation").length;
+  const suggestionCount = review.findings.filter(f => f.severity === "suggestion").length;
   const withSuggestion = review.findings.filter(f => f.suggestion_patch_diff).length;
 
   lines.push("## 🔍 주요 발견사항");
   lines.push("");
-  lines.push(`> 총 **${review.findings.length}건** (🔴 high: ${highCount} | 🟡 medium: ${mediumCount} | 🟢 low: ${lowCount}) | 제안 패치: ${withSuggestion}건`);
+  lines.push(`> 총 **${review.findings.length}건** (🔴 필수: ${requiredCount} | ⚠️ 개선: ${improvementCount} | 📝 적극제안: ${recommendationCount} | 💡 단순제안: ${suggestionCount}) | 제안 패치: ${withSuggestion}건`);
   lines.push("");
   
   // 요약 테이블
-  lines.push("| 심각도 | 파일 | 이슈 |");
-  lines.push("|--------|------|------|");
+  lines.push("| 평가 라벨 | 파일 | 이슈 |");
+  lines.push("|----------|------|------|");
   review.findings.forEach((f) => {
-    const severityIcon = { high: "🔴", medium: "🟡", low: "🟢" }[f.severity];
+    const severityIcon = SEVERITY_ICONS[f.severity];
+    const severityLabel = SEVERITY_LABELS[f.severity];
     const fileName = f.file ? f.file.split("/").pop() : "-";
-    lines.push(`| ${severityIcon} **${f.severity}** | \`${fileName}\` | ${f.title_ko} |`);
+    lines.push(`| ${severityIcon} **${severityLabel}** | \`${fileName}\` | ${f.title_ko} |`);
   });
   lines.push("");
 
@@ -189,13 +221,14 @@ export function toMarkdown(review: ReviewRecord): string {
   lines.push("");
 
   review.findings.forEach((f, idx) => {
-    const severityIcon = { high: "🔴", medium: "🟡", low: "🟢" }[f.severity];
+    const severityIcon = SEVERITY_ICONS[f.severity];
+    const severityLabel = SEVERITY_LABELS[f.severity];
     const where =
       f.file
         ? `${f.file}${(f.startLine || f.endLine) ? `:${f.startLine ?? ""}-${f.endLine ?? ""}` : ""}`
         : "(파일 미지정)";
     
-    lines.push(`### ${idx + 1}. ${severityIcon} [${f.severity}] ${f.title_ko}`);
+    lines.push(`### ${idx + 1}. ${severityIcon} [${severityLabel}] ${f.title_ko}`);
     lines.push("");
     lines.push(`- **위치**: \`${where}\``);
     // 카테고리를 한글로 표시

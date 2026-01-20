@@ -4,6 +4,13 @@ import crypto from "node:crypto";
 
 export type TaskStatus = "pending" | "in_progress" | "completed" | "cancelled";
 
+// 평가 라벨 (점수 기반)
+export type SeverityType = 
+  | "suggestion"     // 단순제안 (100~80점)
+  | "recommendation" // 적극제안 (79~60점)
+  | "improvement"    // 개선 (59~40점)
+  | "required";      // 필수 (39~0점)
+
 export type Task = {
   id: string;
   created_at: string;
@@ -20,7 +27,7 @@ export type Task = {
   file?: string;
   startLine?: number;
   endLine?: number;
-  severity: "low" | "medium" | "high";
+  severity: SeverityType;
   category?: string;
 
   // 수정 제안
@@ -152,7 +159,7 @@ export async function createTasksFromReview(
   reviewId: string,
   review: {
     findings: Array<{
-      severity: "low" | "medium" | "high";
+      severity: SeverityType;
       category?: string;
       file?: string;
       startLine?: number;
@@ -206,6 +213,14 @@ export async function getTaskStats(dataDir: string): Promise<{
   };
 }
 
+// 평가 라벨 한글 매핑
+const SEVERITY_LABELS: Record<SeverityType, string> = {
+  suggestion: "단순제안",
+  recommendation: "적극제안",
+  improvement: "개선",
+  required: "필수"
+};
+
 /**
  * Task를 마크다운으로 변환
  */
@@ -215,7 +230,7 @@ export function taskToMarkdown(task: Task): string {
   lines.push("");
   lines.push(`- **ID**: ${task.id}`);
   lines.push(`- **상태**: ${task.status}`);
-  lines.push(`- **심각도**: ${task.severity}`);
+  lines.push(`- **평가 라벨**: ${SEVERITY_LABELS[task.severity]} (${task.severity})`);
   if (task.category) lines.push(`- **분류**: ${task.category}`);
   if (task.file) {
     const loc = task.startLine 
